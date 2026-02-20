@@ -5,12 +5,14 @@ from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.tools import create_retriever_tool
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_core.prompts import PromptTemplate
+from langchain_openrouter import ChatOpenRouter
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 
 
 EMBED_MODEL = "text-embedding-3-small"
-CHAT_MODEL = "gpt-5-mini"
+CHAT_MODEL = "openai/gpt-5-mini"
 TOP_K = 5
 PERMANENT_RESIDENCE_COLLECTION = "permanent-residence-v1"
 
@@ -94,7 +96,11 @@ def build_agent():
         ),
     )
 
-    llm = ChatOpenAI(model=CHAT_MODEL, temperature=0)
+    # llm = ChatOpenAI(model=CHAT_MODEL, temperature=0)
+    llm = ChatOpenRouter(
+        model=CHAT_MODEL,
+        temperature=0,
+    )
 
     return create_agent(
         model=llm,
@@ -126,48 +132,49 @@ def main() -> None:
             {"messages": [{"role": "user", "content": question}]},
             stream_mode="updates",
         ):
-            if not isinstance(update, dict):
-                continue
+            # if not isinstance(update, dict):
+            #     continue
 
-            for node_name, node_state in update.items():
-                print(f"[{node_name}] update")
-                if isinstance(node_state, dict) and "messages" in node_state:
-                    messages = node_state.get("messages", messages)
+            # for node_name, node_state in update.items():
+            #     print(f"[{node_name}] update")
+            #     if isinstance(node_state, dict) and "messages" in node_state:
+            #         messages = node_state.get("messages", messages)
 
-                    for message in messages:
-                        if isinstance(message, AIMessage):
-                            for tool_call in message.tool_calls or []:
-                                tool_call_id = tool_call.get("id") or "unknown"
-                                if tool_call_id in seen_tool_calls:
-                                    continue
-                                seen_tool_calls.add(tool_call_id)
+            #         for message in messages:
+            #             if isinstance(message, AIMessage):
+            #                 for tool_call in message.tool_calls or []:
+            #                     tool_call_id = tool_call.get("id") or "unknown"
+            #                     if tool_call_id in seen_tool_calls:
+            #                         continue
+            #                     seen_tool_calls.add(tool_call_id)
 
-                                print(
-                                    f"[tool_call_start] name={tool_call.get('name')} id={tool_call_id}"
-                                )
-                                print(f"[tool_call_args] {tool_call.get('args')}")
+            #                     print(
+            #                         f"[tool_call_start] name={tool_call.get('name')} id={tool_call_id}"
+            #                     )
+            #                     print(f"[tool_call_args] {tool_call.get('args')}")
 
-                            if message.content and not (message.tool_calls or []):
-                                final_answer = message.content
+            #                 if message.content and not (message.tool_calls or []):
+            #                     final_answer = message.content
 
-                        elif isinstance(message, ToolMessage):
-                            result_id = message.tool_call_id or str(id(message))
-                            if result_id in seen_tool_results:
-                                continue
-                            seen_tool_results.add(result_id)
+            #             elif isinstance(message, ToolMessage):
+            #                 result_id = message.tool_call_id or str(id(message))
+            #                 if result_id in seen_tool_results:
+            #                     continue
+            #                 seen_tool_results.add(result_id)
 
-                            content = message.content if isinstance(message.content, str) else str(message.content)
-                            preview = content[:1200]
-                            suffix = "…" if len(content) > 1200 else ""
-                            print(f"[tool_result] id={result_id}")
-                            print(f"{preview}{suffix}")
+            #                 content = message.content if isinstance(message.content, str) else str(message.content)
+            #                 preview = content[:1200]
+            #                 suffix = "…" if len(content) > 1200 else ""
+            #                 print(f"[tool_result] id={result_id}")
+            #                 print(f"{preview}{suffix}")
+            print(update)
 
-        if not messages:
-            print("\nNo response returned.")
-            continue
+        # if not messages:
+        #     print("\nNo response returned.")
+        #     continue
 
-        print("\n=== Answer ===\n")
-        print(final_answer if final_answer else messages[-1].content)
+        # print("\n=== Answer ===\n")
+        # print(final_answer if final_answer else messages[-1].content)
 
 
 if __name__ == "__main__":
