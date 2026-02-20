@@ -6,11 +6,12 @@ import httpx
 import trafilatura
 
 SITEMAP_FILE = "sitemap.xml"  # path to your local sitemap XML
+START = 1199  # 0-indexed URL position to start sampling from
 N = 8  # number of URLs to sample
 OUTPUT_FILE = "sample_output.json"  # output file for extracted data
 
 
-def parse_sitemap(path: str, limit: int) -> List[str]:
+def parse_sitemap(path: str, start: int, limit: int) -> List[str]:
     tree = ET.parse(path)
     root = tree.getroot()
 
@@ -18,10 +19,15 @@ def parse_sitemap(path: str, limit: int) -> List[str]:
     ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 
     urls: List[str] = []
+    seen = 0
     for url_node in root.findall("sm:url", ns):
         loc = url_node.find("sm:loc", ns)
         if loc is not None and loc.text:
+            if seen < start:
+                seen += 1
+                continue
             urls.append(loc.text.strip())
+            seen += 1
         if len(urls) >= limit:
             break
 
@@ -39,8 +45,8 @@ def extract_main_text(html: str, url: str) -> str:
 
 
 def main() -> List[Dict[str, Any]]:
-    urls = parse_sitemap(SITEMAP_FILE, N)
-    print(f"Parsed {len(urls)} URLs from {SITEMAP_FILE}\n")
+    urls = parse_sitemap(SITEMAP_FILE, START, N)
+    print(f"Parsed {len(urls)} URLs from {SITEMAP_FILE} (start={START}, n={N})\n")
 
     pages_data: List[Dict[str, Any]] = []
 

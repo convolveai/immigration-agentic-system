@@ -1,6 +1,7 @@
 import json
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 import httpx
 import trafilatura
@@ -8,9 +9,34 @@ import trafilatura
 
 SITEMAP_FILE = "sitemap.xml"
 START = 0  # 0-indexed URL position to start from (after filtering)
-N_URLS: Optional[int] = 8  # set to None to parse until end of sitemap
+N_URLS: Optional[int] = None  # set to None to parse until end of sitemap
 MIN_TEXT_CHARS = 300
 OUTPUT_FILE = "extracted_pages.jsonl"
+BASE_PATH = (
+    "/en/immigration-refugees-citizenship/corporate/publications-manuals/"
+    "operational-bulletins-manuals"
+)
+SUB_ROUTE_FILTER: Optional[str] = "temporary-residents"  # e.g. "temporary-residents"; None disables
+
+
+def is_in_scope(url: str, base_path: str, sub_route: Optional[str]) -> bool:
+    path = urlparse(url).path.rstrip("/")
+    normalized_base = base_path.rstrip("/")
+
+    if not path.startswith(normalized_base + "/"):
+        return False
+
+    if not sub_route:
+        return True
+
+    normalized_sub = sub_route.strip("/")
+    sub_prefix = f"{normalized_base}/{normalized_sub}"
+    return (
+        path == sub_prefix
+        or path == sub_prefix + ".html"
+        or path == sub_prefix + ".htm"
+        or path.startswith(sub_prefix + "/")
+    )
 
 
 def parse_sitemap(path: str, start: int, limit: Optional[int]) -> List[str]:
@@ -27,6 +53,8 @@ def parse_sitemap(path: str, start: int, limit: Optional[int]) -> List[str]:
 
         url = loc.text.strip()
         if "expired" in url.lower():
+            continue
+        if not is_in_scope(url, BASE_PATH, SUB_ROUTE_FILTER):
             continue
 
         if seen < start:
@@ -55,7 +83,11 @@ def extract_main_text(html: str, url: str) -> str:
 def main() -> List[Dict[str, Any]]:
     urls = parse_sitemap(SITEMAP_FILE, START, N_URLS)
     n_label = "all" if N_URLS is None else N_URLS
-    print(f"Parsed {len(urls)} URLs from sitemap (start={START}, n={n_label}).\n")
+    sub_label = SUB_ROUTE_FILTER if SUB_ROUTE_FILTER else "all"
+    print(
+        f"Parsed {len(urls)} URLs from sitemap "
+        f"(start={START}, n={n_label}, sub_route={sub_label}).\n"
+    )
 
     headers = {"User-Agent": "IRCC-Assistant-Indexer/0.1 (+contact: you@example.com)"}
 
