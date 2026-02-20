@@ -13,7 +13,7 @@ INPUT_FILE = "chunks.jsonl"
 EMBED_MODEL = "text-embedding-3-small"
 EMBED_BATCH_SIZE = 100
 UPSERT_BATCH_SIZE = 200
-RECREATE_COLLECTION = False  # set True to drop/recreate collection before upsert
+RECREATE_COLLECTION = True  # set True to drop/recreate collection before upsert
 
 
 def load_dotenv_file(path: str = ".env") -> None:
@@ -86,13 +86,21 @@ def build_points(
     points: List[PointStruct] = []
     for idx, (chunk, vector) in enumerate(zip(chunks, vectors)):
         metadata = chunk.get("metadata", {}) or {}
+        url = metadata.get("url")
+        source = metadata.get("source")
+        status = metadata.get("status")
+        chars = metadata.get("chars")
+        chunk_id = chunk.get("chunk_id")
+
         payload = {
             "text": chunk.get("text", ""),
-            "url": metadata.get("url"),
-            "source": metadata.get("source"),
-            "status": metadata.get("status"),
-            "chars": metadata.get("chars"),
-            "chunk_id": chunk.get("chunk_id"),
+            "metadata": {
+                "url": url,
+                "source": source,
+                "status": status,
+                "chars": chars,
+                "chunk_id": chunk_id,
+            },
         }
 
         raw_id = chunk.get("chunk_id")
@@ -107,7 +115,7 @@ def build_points(
             else:
                 point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, raw_id))
         else:
-            fallback = f"chunk-{idx}-{payload.get('url') or ''}"
+            fallback = f"chunk-{idx}-{url or ''}"
             point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, fallback))
 
         points.append(PointStruct(id=point_id, vector=vector, payload=payload))
