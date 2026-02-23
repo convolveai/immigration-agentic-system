@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 
@@ -16,6 +17,33 @@ CHAT_MODEL = "x-ai/grok-4.1-fast"
 TOP_K = 5
 PERMANENT_RESIDENCE_COLLECTION = "permanent-residence-v1"
 TEMPORARY_RESIDENCE_COLLECTION = "temporary-residents-v1"
+AGENT_LOG_FILE = Path(__file__).resolve().parent / "agent_updates.log"
+
+
+def _serialize_for_log(obj: object) -> object:
+    """Convert LangChain messages and other objects to JSON-serializable form."""
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump()
+    raise TypeError(type(obj).__name__)
+
+
+def _log_raw_update(log_path: Path, update: object) -> None:
+    """Append one raw stream update as indented JSON."""
+    try:
+        payload = json.dumps(
+            update,
+            default=_serialize_for_log,
+            ensure_ascii=False,
+            indent=2,
+        )
+    except (TypeError, ValueError):
+        payload = json.dumps(
+            {"raw_repr": repr(update)},
+            ensure_ascii=False,
+            indent=2,
+        )
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(payload + "\n\n")
 
 
 def load_dotenv_file(path: str = ".env") -> None:
@@ -118,6 +146,7 @@ def build_agent():
 
 def main() -> None:
     agent = build_agent()
+    AGENT_LOG_FILE.write_text("", encoding="utf-8")
 
     while True:
         question = input("\nQuestion (or 'exit'): ").strip()
@@ -127,6 +156,15 @@ def main() -> None:
             continue
 
         print("\n=== Agent Updates ===")
+        with open(AGENT_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(
+                json.dumps(
+                    {"event": "question", "question": question},
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n\n"
+            )
         messages = []
         final_answer = None
         seen_tool_calls = set()
@@ -135,8 +173,7 @@ def main() -> None:
             {"messages": [{"role": "user", "content": question}]},
             stream_mode="updates",
         ):
-            # if not isinstance(update, dict):
-            #     continue
+            _log_raw_update(AGENT_LOG_FILE, update)
 
             for node_name, node_state in update.items():
                 print(f"[{node_name}] update")

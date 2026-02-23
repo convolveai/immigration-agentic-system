@@ -1,2 +1,6 @@
 .venv
 .env
+agent_updates.log
+*.xml
+*.jsonl
+*.json
