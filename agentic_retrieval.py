@@ -12,9 +12,10 @@ from qdrant_client import QdrantClient
 
 
 EMBED_MODEL = "text-embedding-3-small"
-CHAT_MODEL = "openai/gpt-5-mini"
+CHAT_MODEL = "x-ai/grok-4.1-fast"
 TOP_K = 5
 PERMANENT_RESIDENCE_COLLECTION = "permanent-residence-v1"
+TEMPORARY_RESIDENCE_COLLECTION = "temporary-residents-v1"
 
 
 def load_dotenv_file(path: str = ".env") -> None:
@@ -46,7 +47,6 @@ def build_agent():
 
     qdrant_url = require_env("QDRANT_URL")
     qdrant_api_key = require_env("QDRANT_API_KEY")
-    qdrant_collection = require_env("QDRANT_COLLECTION")
     require_env("OPENAI_API_KEY")
 
     qdrant_client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
@@ -54,7 +54,7 @@ def build_agent():
 
     temporary_vector_store = QdrantVectorStore(
         client=qdrant_client,
-        collection_name=qdrant_collection,
+        collection_name=TEMPORARY_RESIDENCE_COLLECTION,
         embedding=embeddings,
         content_payload_key="text",
         metadata_payload_key="metadata",
@@ -98,7 +98,7 @@ def build_agent():
 
     # llm = ChatOpenAI(model=CHAT_MODEL, temperature=0)
     llm = ChatOpenRouter(
-        model=CHAT_MODEL,
+        model=CHAT_MODEL + ":online",
         temperature=0,
     )
 
@@ -108,7 +108,10 @@ def build_agent():
         system_prompt=(
             "You are an assistant for IRCC temporary and permanent residence policy questions. "
             "Use the most relevant tool for the user's question. "
-            "If information is missing, say you don't know."
+            "If tools do not provide a sufficient or directly relevant answer, "
+            "perform a web search to find the most relevant information."
+            "If neither official web sources nor the local manuals contain enough "
+            "information to answer confidently, say that you don't know."
         ),
     )
 
@@ -135,46 +138,46 @@ def main() -> None:
             # if not isinstance(update, dict):
             #     continue
 
-            # for node_name, node_state in update.items():
-            #     print(f"[{node_name}] update")
-            #     if isinstance(node_state, dict) and "messages" in node_state:
-            #         messages = node_state.get("messages", messages)
+            for node_name, node_state in update.items():
+                print(f"[{node_name}] update")
+                if isinstance(node_state, dict) and "messages" in node_state:
+                    messages = node_state.get("messages", messages)
 
-            #         for message in messages:
-            #             if isinstance(message, AIMessage):
-            #                 for tool_call in message.tool_calls or []:
-            #                     tool_call_id = tool_call.get("id") or "unknown"
-            #                     if tool_call_id in seen_tool_calls:
-            #                         continue
-            #                     seen_tool_calls.add(tool_call_id)
+                    for message in messages:
+                        if isinstance(message, AIMessage):
+                            for tool_call in message.tool_calls or []:
+                                tool_call_id = tool_call.get("id") or "unknown"
+                                if tool_call_id in seen_tool_calls:
+                                    continue
+                                seen_tool_calls.add(tool_call_id)
 
-            #                     print(
-            #                         f"[tool_call_start] name={tool_call.get('name')} id={tool_call_id}"
-            #                     )
-            #                     print(f"[tool_call_args] {tool_call.get('args')}")
+                                print(
+                                    f"[tool_call_start] name={tool_call.get('name')} id={tool_call_id}"
+                                )
+                                print(f"[tool_call_args] {tool_call.get('args')}")
 
-            #                 if message.content and not (message.tool_calls or []):
-            #                     final_answer = message.content
+                            if message.content and not (message.tool_calls or []):
+                                final_answer = message.content
 
-            #             elif isinstance(message, ToolMessage):
-            #                 result_id = message.tool_call_id or str(id(message))
-            #                 if result_id in seen_tool_results:
-            #                     continue
-            #                 seen_tool_results.add(result_id)
+                        elif isinstance(message, ToolMessage):
+                            result_id = message.tool_call_id or str(id(message))
+                            if result_id in seen_tool_results:
+                                continue
+                            seen_tool_results.add(result_id)
 
-            #                 content = message.content if isinstance(message.content, str) else str(message.content)
-            #                 preview = content[:1200]
-            #                 suffix = "…" if len(content) > 1200 else ""
-            #                 print(f"[tool_result] id={result_id}")
-            #                 print(f"{preview}{suffix}")
-            print(update)
+                            content = message.content if isinstance(message.content, str) else str(message.content)
+                            preview = content[:1200]
+                            suffix = "…" if len(content) > 1200 else ""
+                            print(f"[tool_result] id={result_id}")
+                            print(f"{preview}{suffix}")
+            
 
-        # if not messages:
-        #     print("\nNo response returned.")
-        #     continue
+        if not messages:
+            print("\nNo response returned.")
+            continue
 
-        # print("\n=== Answer ===\n")
-        # print(final_answer if final_answer else messages[-1].content)
+        print("\n=== Answer ===\n")
+        print(final_answer if final_answer else messages[-1].content)
 
 
 if __name__ == "__main__":
